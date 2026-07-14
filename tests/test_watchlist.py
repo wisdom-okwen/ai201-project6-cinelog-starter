@@ -131,3 +131,41 @@ def test_remove_from_watchlist_not_present_raises(app, sample_user, sample_film)
     with app.app_context():
         with pytest.raises(NotInWatchlistError):
             remove_from_watchlist(user_id=sample_user, film_id=sample_film)
+
+
+# ── Visibility toggle ────────────────────────────────────────────────────────
+
+def test_add_to_watchlist_respects_public_false(app, sample_user, sample_film):
+    """
+    Callers can explicitly opt an entry out of the public=True default.
+    """
+    with app.app_context():
+        entry = add_to_watchlist(
+            user_id=sample_user, film_id=sample_film, public=False
+        )
+        assert entry.public is False
+
+
+# ── get_watchlist sort order ─────────────────────────────────────────────────
+
+def test_get_watchlist_returns_alphabetical_order(app, sample_user):
+    """
+    get_watchlist() should return films sorted alphabetically by title,
+    regardless of the order they were added in (see pr-response.md,
+    Comment 5, for the reasoning behind this default).
+    """
+    with app.app_context():
+        film_a = Film(title="Zodiac", year=2007, genre="Thriller")
+        film_b = Film(title="Alien", year=1979, genre="Horror")
+        db.session.add_all([film_a, film_b])
+        db.session.commit()
+
+        # Add "Zodiac" first, then "Alien" — insertion order is reversed
+        # alphabetical order to prove the sort isn't just date_added in disguise.
+        add_to_watchlist(user_id=sample_user, film_id=film_a.id)
+        add_to_watchlist(user_id=sample_user, film_id=film_b.id)
+
+        watchlist = get_watchlist(sample_user)
+        titles = [f["title"] for f in watchlist]
+
+        assert titles == ["Alien", "Zodiac"]
